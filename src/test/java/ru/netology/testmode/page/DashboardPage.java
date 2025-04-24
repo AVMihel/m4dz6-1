@@ -1,4 +1,6 @@
-package ru.netology.testmode.data;
+package ru.netology.testmode.page;
+
+import ru.netology.testmode.data.DataHelper;
 
 import static com.codeborne.selenide.Condition.*;
 import static com.codeborne.selenide.Selenide.*;
@@ -24,7 +26,7 @@ public class DashboardPage {
     public void verifyCardVisible(DataHelper.CardInfo card) {
         $("[data-test-id='" + card.getTestId() + "']")
                 .shouldBe(visible)
-                .shouldHave(text(card.getMaskedNumber()));
+                .shouldHave(text(maskCardNumber(card.getFullNumber())));
     }
 
     private int extractBalance(String text) {
@@ -32,5 +34,13 @@ public class DashboardPage {
         int finish = text.indexOf(balanceFinish);
         String value = text.substring(start + balanceStart.length(), finish);
         return Integer.parseInt(value);
+    }
+
+    private String maskCardNumber(String fullNumber) {
+        return "**** **** **** " + fullNumber.substring(fullNumber.length() - 4);
+    }
+
+    public void verifyDashboardVisible() {
+        $("[data-test-id=dashboard]").shouldBe(visible);
     }
 }

@@ -1,11 +1,10 @@
 package ru.netology.testmode.test;
 
-import com.codeborne.selenide.Configuration;
 import org.junit.jupiter.api.*;
 import ru.netology.testmode.data.*;
+import ru.netology.testmode.page.*;
 
-import static com.codeborne.selenide.Condition.*;
-import static com.codeborne.selenide.Selenide.*;
+import static com.codeborne.selenide.Selenide.open;
 import static org.junit.jupiter.api.Assertions.*;
 
 class TransferTest {
@@ -13,18 +12,10 @@ class TransferTest {
     private DataHelper.CardInfo firstCard;
     private DataHelper.CardInfo secondCard;
 
-    @BeforeAll
-    static void setUpAll() {
-        Configuration.browser = "chrome";
-        Configuration.timeout = 15_000;
-    }
-
     @BeforeEach
     void setup() {
-        Configuration.headless = true;
         open("http://localhost:9999");
 
-        // Авторизация и переход на dashboard
         dashboardPage = new LoginPage()
                 .validLogin(DataHelper.getAuthInfo())
                 .validVerify(DataHelper.getVerificationCode());
@@ -36,17 +27,16 @@ class TransferTest {
     @Test
     @DisplayName("Успешный перевод средств между картами")
     void shouldTransferMoneyBetweenCards() {
-        // Получаем начальные балансы
         int initialFirstCardBalance = dashboardPage.getCardBalance(firstCard);
         int initialSecondCardBalance = dashboardPage.getCardBalance(secondCard);
-        int transferAmount = 1_000;
 
-        // Выполняем перевод
-        dashboardPage = dashboardPage
-                .selectCardToTransfer(secondCard)
-                .makeValidTransfer(String.valueOf(transferAmount), firstCard.getFullNumber());
+        // Рассчитываем сумму перевода как 10% от баланса карты (но не менее 1 рубля)
+        int transferAmount = Math.max(1, initialFirstCardBalance / 10);
 
-        // Проверяем изменения балансов
+        TransferPage transferPage = dashboardPage.selectCardToTransfer(secondCard);
+        transferPage.verifyTransferPageVisible();
+        dashboardPage = transferPage.makeValidTransfer(String.valueOf(transferAmount), firstCard.getFullNumber());
+
         assertEquals(initialFirstCardBalance - transferAmount, dashboardPage.getCardBalance(firstCard));
         assertEquals(initialSecondCardBalance + transferAmount, dashboardPage.getCardBalance(secondCard));
     }
@@ -55,18 +45,13 @@ class TransferTest {
     @DisplayName("Попытка перевода суммы, превышающей баланс карты")
     void shouldNotTransferMoreThanBalance() {
         int initialBalance = dashboardPage.getCardBalance(firstCard);
-        int excessiveAmount = initialBalance + 10_000;
+        // Пытаемся перевести сумму, превышающую баланс на 1 рубль
+        int excessiveAmount = initialBalance + 1;
 
-        dashboardPage
-                .selectCardToTransfer(secondCard)
-                .makeTransfer(String.valueOf(excessiveAmount), firstCard.getFullNumber());
+        TransferPage transferPage = dashboardPage.selectCardToTransfer(secondCard);
+        transferPage.makeTransfer(String.valueOf(excessiveAmount), firstCard.getFullNumber());
+        transferPage.checkErrorNotification("Ошибка! Недостаточно средств на карте");
 
-        // Проверяем сообщение об ошибке
-        $("[data-test-id='error-notification'] .notification__content")
-                .shouldBe(visible)
-                .shouldHave(text("Ошибка! Недостаточно средств на карте"));
-
-        // Проверяем, что балансы не изменились
         assertEquals(initialBalance, dashboardPage.getCardBalance(firstCard));
     }
 
@@ -75,11 +60,11 @@ class TransferTest {
     void shouldTransferMinimumAmount() {
         int initialFirstCardBalance = dashboardPage.getCardBalance(firstCard);
         int initialSecondCardBalance = dashboardPage.getCardBalance(secondCard);
-        int transferAmount = 1;
+        int transferAmount = 1; // Минимальная сумма
 
-        dashboardPage = dashboardPage
-                .selectCardToTransfer(secondCard)
-                .makeValidTransfer(String.valueOf(transferAmount), firstCard.getFullNumber());
+        TransferPage transferPage = dashboardPage.selectCardToTransfer(secondCard);
+        transferPage.verifyTransferPageVisible();
+        dashboardPage = transferPage.makeValidTransfer(String.valueOf(transferAmount), firstCard.getFullNumber());
 
         assertEquals(initialFirstCardBalance - transferAmount, dashboardPage.getCardBalance(firstCard));
         assertEquals(initialSecondCardBalance + transferAmount, dashboardPage.getCardBalance(secondCard));
@@ -91,21 +76,17 @@ class TransferTest {
         int initialFirstCardBalance = dashboardPage.getCardBalance(firstCard);
         int initialSecondCardBalance = dashboardPage.getCardBalance(secondCard);
 
-        // Начинаем перевод, но отменяем
-        dashboardPage = dashboardPage
-                .selectCardToTransfer(secondCard)
-                .cancelTransfer();
+        // Рассчитываем тестовую сумму перевода
+        int transferAmount = Math.max(1, initialFirstCardBalance / 20);
 
-        // Проверяем, что балансы не изменились
+        TransferPage transferPage = dashboardPage.selectCardToTransfer(secondCard);
+        transferPage.verifyTransferPageVisible();
+        transferPage.setAmount(String.valueOf(transferAmount));
+        transferPage.setFromCard(firstCard.getFullNumber());
+        dashboardPage = transferPage.cancelTransfer();
+
         assertEquals(initialFirstCardBalance, dashboardPage.getCardBalance(firstCard));
         assertEquals(initialSecondCardBalance, dashboardPage.getCardBalance(secondCard));
-
-        // Проверяем, что вернулись на страницу dashboard
-        $("[data-test-id=dashboard]").shouldBe(visible);
-    }
-
-    @AfterEach
-    void tearDown() {
-        refresh(); // Обновляем страницу после каждого теста
+        dashboardPage.verifyDashboardVisible();
     }
 }

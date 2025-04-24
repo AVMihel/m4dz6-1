@@ -1,4 +1,6 @@
-package ru.netology.testmode.data;
+package ru.netology.testmode.page;
+
+import ru.netology.testmode.data.DataHelper;
 
 import static com.codeborne.selenide.Selenide.$;
 
